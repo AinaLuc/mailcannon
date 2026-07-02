@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailCannon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+  <nav class="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">📨</span>
+      <h1 class="text-xl font-bold text-white">MailCannon</h1>
+      <span class="text-xs bg-emerald-600/20 text-emerald-400 px-2 py-0.5 rounded-full">beta</span>
+    </div>
+    <div class="text-sm text-gray-500">AI-Powered Email Outreach</div>
+  </nav>
+
+  <div class="flex border-b border-gray-800 px-6">
+    <button data-tab="contacts" class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">Contacts</button>
+    <button data-tab="campaigns" class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">Campaigns</button>
+    <button data-tab="providers" class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">Providers</button>
+    <button data-tab="schedules" class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">Schedules</button>
+    <button data-tab="deliverability" class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-white transition-colors">Deliverability</button>
+  </div>
+
+  <main class="p-6 max-w-6xl mx-auto">
+    <!-- Contacts -->
+    <section id="tab-contacts" class="tab-content">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-lg font-semibold">Contacts</h2>
+        <button onclick="showAddContactModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">+ Add Contact</button>
+      </div>
+      <div class="mb-4 flex gap-2">
+        <textarea id="bulk-contacts" rows="3" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-600" placeholder='Bulk add: one JSON per line {"email":"a@b.com","firstName":"A"}'></textarea>
+        <button onclick="bulkAddContacts()" class="bg-gray-800 hover:bg-gray-700 text-white text-sm px-4 py-2 rounded-lg transition-colors self-end">Bulk Add</button>
+      </div>
+      <table class="w-full text-sm"><thead><tr class="border-b border-gray-800 text-gray-500 text-left"><th class="pb-3 font-medium">Email</th><th class="pb-3 font-medium">Name</th><th class="pb-3 font-medium">Company</th><th class="pb-3 font-medium">Title</th><th class="pb-3 font-medium"></th></tr></thead><tbody id="contacts-list"></tbody></table>
+      <p id="contacts-empty" class="text-gray-600 text-center py-12 hidden">No contacts yet.</p>
+    </section>
+
+    <!-- Campaigns -->
+    <section id="tab-campaigns" class="tab-content hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-lg font-semibold">Campaigns</h2>
+        <button onclick="showCreateCampaignModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">+ New Campaign</button>
+      </div>
+      <div id="campaigns-list" class="space-y-4"></div>
+      <p id="campaigns-empty" class="text-gray-600 text-center py-12 hidden">No campaigns yet.</p>
+    </section>
+
+    <!-- Providers -->
+    <section id="tab-providers" class="tab-content hidden">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-lg font-semibold">Email Providers</h2>
+        <button onclick="showAddProviderModal()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors">+ Advanced Setup</button>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2 mb-8">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-2xl">📧</span>
+            <div><h3 class="font-semibold text-white">Gmail</h3><p class="text-xs text-gray-500">Best deliverability — sign in with Google</p></div>
+          </div>
+          <div id="gmail-setup-status" class="text-xs text-gray-500 mb-3"></div>
+          <div class="flex gap-2">
+            <button id="gmail-connect-btn" onclick="quickAddGmail()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg transition-colors">Connect Gmail</button>
+          </div>
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-2xl">📨</span>
+            <div><h3 class="font-semibold text-white">Zoho Mail</h3><p class="text-xs text-gray-500">Remote MCP — paste your Zoho URL</p></div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <input id="zoho-url-input" placeholder="https://.../message" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-600" />
+            <button onclick="quickAddZoho()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg transition-colors whitespace-nowrap">Connect</button>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="text-sm font-medium text-gray-400 mb-3">Configured Providers</h3>
+      <div id="providers-list" class="grid gap-4 md:grid-cols-2"></div>
+      <p id="providers-empty" class="text-gray-600 text-center py-8 hidden">No providers yet. Use the quick-connect cards above.</p>
+    </section>
+
+    <!-- Schedules -->
+    <section id="tab-schedules" class="tab-content hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-lg font-semibold">Schedules</h2>
+        <button onclick="showScheduleModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">+ Schedule Campaign</button>
+      </div>
+      <table class="w-full text-sm"><thead><tr class="border-b border-gray-800 text-gray-500 text-left"><th class="pb-3 font-medium">Contact</th><th class="pb-3 font-medium">Campaign</th><th class="pb-3 font-medium">Next Step</th><th class="pb-3 font-medium">Next Send</th><th class="pb-3 font-medium">Status</th></tr></thead><tbody id="schedules-list"></tbody></table>
+      <p id="schedules-empty" class="text-gray-600 text-center py-12 hidden">No schedules yet.</p>
+    </section>
+
+    <!-- Deliverability -->
+    <section id="tab-deliverability" class="tab-content hidden">
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-1">Deliverability Stats</h2>
+        <p class="text-xs text-gray-500">Real-time open, bounce, and reply rates across all sent emails.</p>
+      </div>
+      
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <p class="text-xs font-medium text-gray-500 mb-1">Total Sent</p>
+          <p id="stats-sent" class="text-2xl font-bold text-white">0</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <p class="text-xs font-medium text-gray-500 mb-1">Open Rate</p>
+          <div class="flex items-baseline gap-2">
+            <p id="stats-open-rate" class="text-2xl font-bold text-emerald-400">0%</p>
+            <p id="stats-opened-count" class="text-xs text-gray-500">0 emails</p>
+          </div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <p class="text-xs font-medium text-gray-500 mb-1">Bounce Rate</p>
+          <div class="flex items-baseline gap-2">
+            <p id="stats-bounce-rate" class="text-2xl font-bold text-red-400">0%</p>
+            <p id="stats-bounced-count" class="text-xs text-gray-500">0 emails</p>
+          </div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <p class="text-xs font-medium text-gray-500 mb-1">Reply Rate</p>
+          <div class="flex items-baseline gap-2">
+            <p id="stats-reply-rate" class="text-2xl font-bold text-blue-400">0%</p>
+            <p id="stats-replied-count" class="text-xs text-gray-500">0 emails</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sent Emails Table -->
+      <h3 class="text-sm font-medium text-gray-400 mb-3">Outbound Email Log</h3>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-800 text-gray-500 text-left">
+            <th class="pb-3 font-medium">Recipient</th>
+            <th class="pb-3 font-medium">Subject</th>
+            <th class="pb-3 font-medium">Sent At</th>
+            <th class="pb-3 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody id="deliverability-list"></tbody>
+      </table>
+      <p id="deliverability-empty" class="text-gray-600 text-center py-12 hidden">No emails sent yet.</p>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 hidden max-w-sm"></div>
+
+  <!-- Modal: Add Contact -->
+  <div id="add-contact-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md border border-gray-800">
+      <h3 class="text-lg font-semibold mb-4">Add Contact</h3>
+      <div class="space-y-3">
+        <input id="contact-email" placeholder="Email" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <input id="contact-first" placeholder="First Name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <input id="contact-last" placeholder="Last Name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <input id="contact-company" placeholder="Company" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <input id="contact-title" placeholder="Title" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="closeModal('add-contact-modal')" class="text-gray-400 hover:text-white text-sm px-4 py-2">Cancel</button>
+        <button onclick="saveContact()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Campaign -->
+  <div id="create-campaign-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md border border-gray-800">
+      <h3 class="text-lg font-semibold mb-4">Create Campaign</h3>
+      <input id="campaign-name" placeholder="Campaign Name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="closeModal('create-campaign-modal')" class="text-gray-400 hover:text-white text-sm px-4 py-2">Cancel</button>
+        <button onclick="saveCampaign()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Step -->
+  <div id="add-step-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-lg border border-gray-800">
+      <h3 class="text-lg font-semibold mb-4">Add Campaign Step</h3>
+      <input id="step-campaign-id" type="hidden" />
+      <div class="space-y-3">
+        <label class="text-xs text-gray-500 block mb-1">Send on Day</label>
+        <input id="step-day" type="number" min="0" value="0" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <input id="step-subject" placeholder='Email Subject (use {{firstName}} etc.)' class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <textarea id="step-body" rows="4" placeholder="Email Body (HTML or plain text)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="closeModal('add-step-modal')" class="text-gray-400 hover:text-white text-sm px-4 py-2">Cancel</button>
+        <button onclick="saveStep()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">Add Step</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Provider -->
+  <div id="add-provider-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-lg border border-gray-800">
+      <h3 class="text-lg font-semibold mb-4">Add MCP Provider</h3>
+      <div class="space-y-3">
+        <label class="text-xs text-gray-500 block mb-1">Provider Type</label>
+        <select id="provider-kind" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600">
+          <option value="gmail">Gmail MCP</option>
+          <option value="zoho">Zoho MCP</option>
+        </select>
+        <label class="text-xs text-gray-500 block mb-1">Connection Type</label>
+        <select id="provider-transport" onchange="toggleTransportFields()" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600">
+          <option value="stdio">Local (stdio)</option>
+          <option value="sse">Remote (SSE)</option>
+        </select>
+        <input id="provider-name" placeholder="Display Name (e.g. My Zoho)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <div id="provider-stdio-fields">
+          <input id="provider-command" placeholder="Command (e.g. npx)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+          <input id="provider-args" placeholder="Args (comma separated, e.g. -y,@gmail-mcp/gmail-mcp-server)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        </div>
+        <div id="provider-sse-fields" class="hidden">
+          <label class="flex items-center gap-2 text-xs text-gray-400 mb-2">
+            <input id="provider-use-mcp-remote" type="checkbox" checked onchange="toggleMcpRemote()" class="rounded bg-gray-800 border-gray-600" />
+            Use mcp-remote wrapper (recommended)
+          </label>
+          <input id="provider-url" placeholder="URL (e.g. https://.../message)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+          <div id="provider-mcp-remote-fields">
+            <p class="text-xs text-gray-500 mt-1">Launches <code class="text-emerald-400">mcp-remote</code> to handle OAuth + HTTP transport automatically.</p>
+          </div>
+          <div id="provider-direct-http-fields" class="hidden">
+            <div class="flex gap-2 mt-2">
+              <input id="provider-access-token" placeholder="Access Token (if you have one)" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+              <button onclick="oauthLogin(this)" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-2 rounded-lg transition-colors whitespace-nowrap">OAuth Login</button>
+            </div>
+          </div>
+        </div>
+        <label class="text-xs text-gray-500 block mb-1">Environment Variables (JSON, optional)</label>
+        <textarea id="provider-env" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600 font-mono" placeholder='{"senderEmail": "you@example.com", "accountId": "xxx"}'></textarea>
+      </div>
+      <div class="flex gap-2 mt-6">
+        <button onclick="testProviderBeforeSave()" class="bg-gray-700 hover:bg-gray-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">Test Connection</button>
+        <div class="flex-1"></div>
+        <button onclick="closeModal('add-provider-modal')" class="text-gray-400 hover:text-white text-sm px-4 py-2">Cancel</button>
+        <button onclick="saveProvider()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">Save</button>
+      </div>
+      <div id="provider-test-result" class="mt-3 text-sm hidden"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Send Test Email -->
+  <div id="send-test-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-lg border border-gray-800">
+      <h3 class="text-lg font-semibold mb-4">Send Test Email</h3>
+      <input id="send-provider-id" type="hidden" />
+      <div class="space-y-3">
+        <input id="send-to" value="test@example.com" placeholder="To (email address)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <input id="send-subject" value="You're in - MailCannon is ready to send" placeholder="Subject" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <textarea id="send-body" rows="8" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600 font-mono">Hey there,
+
+You're all set. MailCannon is ready to start sending your campaigns.
+
+Drop in a contact list and write your first email - we'll handle the rest from there.
+
+Open MailCannon Dashboard
+https://localhost:3456
+
+Questions? Just hit reply.
+
+Best,
+The MailCannon Team</textarea>
+      </div>
+      <div id="send-test-result" class="mt-3 text-sm hidden"></div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="closeModal('send-test-modal')" class="text-gray-400 hover:text-white text-sm px-4 py-2">Cancel</button>
+        <button onclick="sendTestEmail()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">Send</button>
+      </div>
+    </div>
+  </div>
+  <div id="schedule-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md border border-gray-800">
+      <h3 class="text-lg font-semibold mb-4">Schedule Campaign</h3>
+      <div class="space-y-3">
+        <select id="schedule-campaign" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600"><option value="">Select campaign...</option></select>
+        <select id="schedule-contacts" multiple class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600 h-32"></select>
+        <p class="text-xs text-gray-500">Cmd/Ctrl+click to select multiple</p>
+        <input id="schedule-start" type="datetime-local" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+        <label class="text-xs text-gray-500 block mb-1">Send via</label>
+        <select id="schedule-provider" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600"><option value="">Select provider...</option></select>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="closeModal('schedule-modal')" class="text-gray-400 hover:text-white text-sm px-4 py-2">Cancel</button>
+        <button onclick="saveSchedule()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">Schedule</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BASE = '';
+    function $(id) { return document.getElementById(id); }
+
+    function showToast(msg, type) {
+      type = type || 'success';
+      const t = $('toast');
+      const bg = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-red-600' : 'bg-gray-700';
+      t.innerHTML = '<div class="' + bg + ' text-white px-4 py-3 rounded-lg shadow-lg text-sm">' + msg + '</div>';
+      t.classList.remove('hidden');
+      setTimeout(function() { t.classList.add('hidden'); }, 5000);
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.tab-btn').forEach(function(b) {
+          b.classList.remove('text-white', 'border-emerald-500');
+          b.classList.add('text-gray-400', 'border-transparent');
+        });
+        btn.classList.remove('text-gray-400', 'border-transparent');
+        btn.classList.add('text-white', 'border-emerald-500');
+        document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
+        $('tab-' + btn.dataset.tab).classList.remove('hidden');
+        loadData(btn.dataset.tab);
+      });
+    });
+
+    function loadData(tab) {
+      if (tab === 'contacts') loadContacts();
+      else if (tab === 'campaigns') loadCampaigns();
+      else if (tab === 'providers') loadProviders();
+      else if (tab === 'schedules') loadSchedules();
+      else if (tab === 'deliverability') loadDeliverability();
+    }
+
+    // Contacts
+    async function loadContacts() {
+      const res = await fetch(BASE + '/api/contacts');
+      const contacts = await res.json();
+      const tbody = $('contacts-list');
+      const empty = $('contacts-empty');
+      if (contacts.length === 0) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      tbody.innerHTML = contacts.map(function(c) {
+        return '<tr class="border-b border-gray-800/50 hover:bg-gray-900/50">' +
+          '<td class="py-3">' + c.email + '</td>' +
+          '<td class="py-3">' + c.firstName + ' ' + (c.lastName || '') + '</td>' +
+          '<td class="py-3 text-gray-400">' + (c.company || '-') + '</td>' +
+          '<td class="py-3 text-gray-400">' + (c.title || '-') + '</td>' +
+          '<td class="py-3 text-right"><button onclick="deleteContact(\'' + c.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Delete</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    async function deleteContact(id) { await fetch(BASE + '/api/contacts/' + id, { method: 'DELETE' }); loadContacts(); }
+    function showAddContactModal() { $('add-contact-modal').classList.remove('hidden'); $('add-contact-modal').classList.add('flex'); }
+    function closeModal(id) { $(id).classList.add('hidden'); $(id).classList.remove('flex'); }
+
+    async function saveContact() {
+      const body = { email: $('contact-email').value, firstName: $('contact-first').value };
+      const last = $('contact-last').value; if (last) body.lastName = last;
+      const co = $('contact-company').value; if (co) body.company = co;
+      const ti = $('contact-title').value; if (ti) body.title = ti;
+      await fetch(BASE + '/api/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      closeModal('add-contact-modal');
+      ['contact-email','contact-first','contact-last','contact-company','contact-title'].forEach(function(id) { $(id).value = ''; });
+      loadContacts(); showToast('Contact added');
+    }
+
+    async function bulkAddContacts() {
+      const raw = $('bulk-contacts').value.trim(); if (!raw) return;
+      const contacts = raw.split('\n').filter(function(l) { return l.trim(); }).map(function(l) { return JSON.parse(l); });
+      await fetch(BASE + '/api/contacts/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contacts: contacts }) });
+      $('bulk-contacts').value = ''; loadContacts(); showToast(contacts.length + ' contacts added');
+    }
+
+    // Campaigns
+    async function loadCampaigns() {
+      const res = await fetch(BASE + '/api/campaigns');
+      const campaigns = await res.json();
+      const container = $('campaigns-list'); const empty = $('campaigns-empty');
+      if (campaigns.length === 0) { container.innerHTML = ''; empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      container.innerHTML = campaigns.map(function(c) {
+        var stepsHtml = c.steps.length === 0
+          ? '<p class="text-gray-600 text-sm">No steps yet</p>'
+          : '<div class="space-y-2">' + c.steps.map(function(s) {
+              return '<div class="flex items-center gap-3 text-sm"><span class="bg-gray-800 text-gray-400 text-xs px-2 py-0.5 rounded-full min-w-[4rem]">Day ' + s.day + '</span><span class="text-gray-300">' + s.subject + '</span></div>';
+            }).join('') + '</div>';
+        return '<div class="bg-gray-900 border border-gray-800 rounded-xl p-4">' +
+          '<div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-white">' + c.name + '</h3>' +
+          '<button onclick="showAddStepModal(\'' + c.id + '\')" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors">+ Add Step</button></div>' +
+          stepsHtml + '</div>';
+      }).join('');
+    }
+
+    function showCreateCampaignModal() { $('create-campaign-modal').classList.remove('hidden'); $('create-campaign-modal').classList.add('flex'); }
+    async function saveCampaign() {
+      const name = $('campaign-name').value; if (!name) return;
+      await fetch(BASE + '/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+      closeModal('create-campaign-modal'); $('campaign-name').value = ''; loadCampaigns(); showToast('Campaign created');
+    }
+    function showAddStepModal(cid) { $('step-campaign-id').value = cid; $('add-step-modal').classList.remove('hidden'); $('add-step-modal').classList.add('flex'); }
+    async function saveStep() {
+      const body = { campaignId: $('step-campaign-id').value, day: parseInt($('step-day').value), subject: $('step-subject').value, body: $('step-body').value };
+      await fetch(BASE + '/api/campaigns/' + body.campaignId + '/steps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      closeModal('add-step-modal'); $('step-day').value = '0'; $('step-subject').value = ''; $('step-body').value = ''; loadCampaigns(); showToast('Step added');
+    }
+
+    // Providers
+    async function loadProviders() {
+      checkGmailMcp();
+      const res = await fetch(BASE + '/api/providers');
+      const providers = await res.json();
+      const container = $('providers-list'); const empty = $('providers-empty');
+      if (providers.length === 0) { container.innerHTML = ''; empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      container.innerHTML = providers.map(function(p) {
+        var badgeColor = p.kind === 'gmail' ? 'bg-red-600/20 text-red-400' : 'bg-blue-600/20 text-blue-400';
+        var statusIcon = p.kind === 'gmail' ? '<span class="text-emerald-400 text-xs">✅ ' + (p.refreshToken ? 'Connected via Google OAuth' : 'via gmail-mcp') + '</span>' : '';
+        return '<div class="bg-gray-900 border border-gray-800 rounded-xl p-4">' +
+          '<div class="flex items-start justify-between mb-3">' +
+          '<div><h3 class="font-semibold text-white">' + p.name + '</h3><span class="text-xs ' + badgeColor + ' px-2 py-0.5 rounded-full">' + p.kind.toUpperCase() + '</span></div>' +
+          '<div class="flex gap-2"><button onclick="testProvider(\'' + p.id + '\')" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors">Test</button>' +
+          '<button onclick="showSendModal(\'' + p.id + '\')" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-emerald-300 px-3 py-1.5 rounded-lg transition-colors">Send</button>' +
+          '<button onclick="deleteProvider(\'' + p.id + '\')" class="text-xs bg-red-900/50 hover:bg-red-800 text-red-400 px-3 py-1.5 rounded-lg transition-colors">Remove</button></div></div>' +
+          '<div class="text-xs text-gray-500 font-mono truncate">' + (p.url || (p.command + ' ' + (p.args || []).join(' '))) + '</div>' +
+          (statusIcon || (p.transport === 'sse' ? '<div class="mt-1 text-xs ' + (p.accessToken ? 'text-emerald-400' : 'text-yellow-400') + '">' + (p.accessToken ? 'Token set' : 'No token — test to start OAuth') + '</div>' : '')) +
+          '<div id="provider-status-' + p.id + '" class="mt-2 text-xs"></div></div>';
+      }).join('');
+    }
+
+    function toggleTransportFields() {
+      var transport = $('provider-transport').value;
+      $('provider-stdio-fields').classList.toggle('hidden', transport !== 'stdio');
+      $('provider-sse-fields').classList.toggle('hidden', transport !== 'sse');
+    }
+
+    function toggleMcpRemote() {
+      var useRemote = $('provider-use-mcp-remote').checked;
+      $('provider-mcp-remote-fields').classList.toggle('hidden', !useRemote);
+      $('provider-direct-http-fields').classList.toggle('hidden', useRemote);
+    }
+
+    function showAddProviderModal() {
+      $('provider-name').value = ''; $('provider-command').value = ''; $('provider-args').value = ''; $('provider-url').value = ''; $('provider-access-token').value = ''; $('provider-env').value = '';
+      $('provider-transport').value = 'stdio'; $('provider-kind').value = 'gmail';
+      $('provider-use-mcp-remote').checked = true;
+      $('provider-test-result').classList.add('hidden');
+      toggleTransportFields(); toggleMcpRemote();
+      $('add-provider-modal').classList.remove('hidden'); $('add-provider-modal').classList.add('flex');
+    }
+
+    function getProviderFormData() {
+      var envRaw = $('provider-env').value.trim();
+      var transport = $('provider-transport').value;
+      var data = {
+        name: $('provider-name').value,
+        kind: $('provider-kind').value,
+        transport: transport,
+      };
+      if (transport === 'sse') {
+        data.url = $('provider-url').value;
+        if ($('provider-use-mcp-remote').checked && data.url) {
+          data.command = 'npx';
+          data.args = ['mcp-remote', data.url, '--transport', 'http-only'];
+        } else {
+          var token = $('provider-access-token').value.trim();
+          if (token) data.accessToken = token;
+        }
+      } else {
+        data.command = $('provider-command').value;
+        data.args = $('provider-args').value.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+      }
+      if (envRaw) data.env = JSON.parse(envRaw);
+      return data;
+    }
+
+    async function testProviderBeforeSave() {
+      var rd = $('provider-test-result'); rd.classList.remove('hidden');
+      try {
+        var body = getProviderFormData();
+        rd.innerHTML = '<span class="text-gray-400">Testing connection...</span>';
+        var res = await fetch(BASE + '/api/providers/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        var data = await res.json();
+        rd.innerHTML = data.ok ? '<span class="text-emerald-400">OK ' + data.message + '</span>' : '<span class="text-red-400">FAIL ' + data.message + '</span>';
+        if (data.ok && data.discoveredEnv) {
+          var existing = {};
+          try { existing = JSON.parse($('provider-env').value || '{}'); } catch(e) {}
+          $('provider-env').value = JSON.stringify(Object.assign({}, existing, data.discoveredEnv), null, 2);
+        }
+      } catch(e) { rd.innerHTML = '<span class="text-red-400">FAIL ' + e.message + '</span>'; }
+    }
+
+    function oauthLogin(btn) {
+      if (!btn) btn = event && event.target;
+      if (!btn) return;
+      var url = $('provider-url').value.trim();
+      if (!url) { showToast('Enter the provider URL first', 'error'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Opening...';
+      fetch(BASE + '/api/oauth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: $('provider-name').value || 'Zoho', kind: $('provider-kind').value, url: url }),
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { showToast(data.error, 'error'); btn.disabled = false; btn.textContent = 'OAuth Login'; return; }
+        var popup = window.open(data.authUrl, 'oauth', 'width=600,height=700');
+        if (!popup) { showToast('Popup blocked! Allow popups for this site.', 'error'); btn.disabled = false; btn.textContent = 'OAuth Login'; return; }
+        function handler(e) {
+          if (e.data && e.data.accessToken) {
+            $('provider-access-token').value = e.data.accessToken;
+            showToast('OAuth complete! Token received.');
+            window.removeEventListener('message', handler);
+            btn.disabled = false;
+            btn.textContent = 'OAuth Login';
+          }
+        }
+        window.addEventListener('message', handler);
+        var checkClosed = setInterval(function() {
+          if (popup && popup.closed) {
+            clearInterval(checkClosed);
+            window.removeEventListener('message', handler);
+            btn.disabled = false;
+            btn.textContent = 'OAuth Login';
+          }
+        }, 1000);
+        setTimeout(function() { btn.disabled = false; btn.textContent = 'OAuth Login'; }, 60000);
+      }).catch(function(e) { showToast(e.message, 'error'); btn.disabled = false; btn.textContent = 'OAuth Login'; });
+    }
+
+    async function saveProvider() {
+      try {
+        var body = getProviderFormData();
+        await fetch(BASE + '/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        closeModal('add-provider-modal'); loadProviders(); showToast('Provider added');
+      } catch(e) { showToast(e.message, 'error'); }
+    }
+
+    async function testProvider(id) {
+      var sd = $('provider-status-' + id); sd.innerHTML = '<span class="text-gray-400">Testing...</span>';
+      var res = await fetch(BASE + '/api/providers/' + id + '/test', { method: 'POST' });
+      var data = await res.json();
+      sd.innerHTML = data.ok ? '<span class="text-emerald-400">OK ' + data.message + '</span>' : '<span class="text-red-400">FAIL ' + data.message + '</span>';
+      if (data.ok) { showToast('Provider connected: ' + data.message); loadProviders(); }
+    }
+
+    async function deleteProvider(id) { await fetch(BASE + '/api/providers/' + id, { method: 'DELETE' }); loadProviders(); showToast('Provider removed'); }
+
+    // Quick-add Gmail
+    async function checkGmailMcp() {
+      var el = $('gmail-setup-status');
+      if (el) el.innerHTML = '<span class="text-gray-500">Click Connect to sign in with Google</span>';
+    }
+
+    async function quickAddGmail() {
+      var btn = $('gmail-connect-btn');
+      btn.disabled = true; btn.textContent = 'Opening Google...';
+      try {
+        var res = await fetch(BASE + '/api/gmail/oauth/start', { method: 'POST' });
+        var data = await res.json();
+        if (data.error) { showToast(data.error, 'error'); btn.disabled = false; btn.textContent = 'Connect Gmail'; return; }
+
+        var popup = window.open(data.authUrl, 'gmail-oauth', 'width=600,height=700');
+        if (!popup) { showToast('Popup blocked! Allow popups for this site.', 'error'); btn.disabled = false; btn.textContent = 'Connect Gmail'; return; }
+
+        var connected = false;
+
+        function onMessage(e) {
+          if (e.data && e.data.accessToken) {
+            connected = true;
+            finishConnect();
+          }
+        }
+        window.addEventListener('message', onMessage);
+
+        var poll = setInterval(async function() {
+          if (connected) { clearInterval(poll); return; }
+          var r = await fetch(BASE + '/api/providers');
+          var list = await r.json();
+          var hasGmail = list.some(function(p) { return p.kind === 'gmail' && p.refreshToken; });
+          if (hasGmail) { connected = true; finishConnect(); clearInterval(poll); }
+        }, 2000);
+
+        function finishConnect() {
+          window.removeEventListener('message', onMessage);
+          showToast('Gmail connected!');
+          loadProviders();
+          $('gmail-setup-status').innerHTML = '<span class="text-emerald-400">✅ Connected via Google!</span>';
+          btn.textContent = 'Connected ✓';
+          btn.disabled = true;
+          btn.className = 'text-xs bg-emerald-700 text-emerald-300 px-4 py-2 rounded-lg';
+        }
+
+        var checkClosed = setInterval(function() {
+          if (popup && popup.closed) {
+            clearInterval(checkClosed);
+            if (!connected) {
+              window.removeEventListener('message', onMessage);
+              btn.disabled = false;
+              btn.textContent = 'Connect Gmail';
+            }
+          }
+        }, 1000);
+
+        setTimeout(function() { btn.disabled = false; btn.textContent = 'Connect Gmail'; }, 120000);
+      } catch(e) {
+        showToast(e.message, 'error');
+        btn.disabled = false; btn.textContent = 'Connect Gmail';
+      }
+    }
+
+    // Quick-add Zoho
+    async function quickAddZoho() {
+      var url = $('zoho-url-input').value.trim();
+      if (!url) { showToast('Enter your Zoho MCP URL', 'error'); return; }
+      try {
+        var res = await fetch(BASE + '/api/providers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Zoho Mail',
+            kind: 'zoho',
+            transport: 'sse',
+            url: url,
+            command: 'npx',
+            args: ['mcp-remote', url, '--transport', 'http-only'],
+          }),
+        });
+        var data = await res.json();
+        if (data.error) { showToast(data.error, 'error'); return; }
+        showToast('Zoho provider added! Testing connection...');
+        loadProviders();
+
+        var testRes = await fetch(BASE + '/api/providers/' + data.id + '/test', { method: 'POST' });
+        var testData = await testRes.json();
+        if (!testData.ok) showToast('Connected but test failed: ' + testData.message, 'error');
+      } catch(e) { showToast(e.message, 'error'); }
+    }
+
+    function showSendModal(id) {
+      $('send-provider-id').value = id;
+      $('send-test-result').classList.add('hidden');
+      $('send-test-modal').classList.remove('hidden'); $('send-test-modal').classList.add('flex');
+    }
+
+    async function sendTestEmail() {
+      var id = $('send-provider-id').value;
+      var to = $('send-to').value.trim();
+      var subject = $('send-subject').value.trim();
+      var body = $('send-body').value.trim();
+      if (!to || !subject || !body) { showToast('Fill in all fields', 'error'); return; }
+      var rd = $('send-test-result'); rd.classList.remove('hidden');
+      rd.innerHTML = '<span class="text-gray-400">Sending...</span>';
+      try {
+        var res = await fetch(BASE + '/api/providers/' + id + '/send', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: to, subject: subject, body: body }),
+        });
+        var data = await res.json();
+        rd.innerHTML = data.ok ? '<span class="text-emerald-400">Sent: ' + data.message + '</span>' : '<span class="text-red-400">Failed: ' + data.message + '</span>';
+        if (data.ok) showToast('Test email sent!');
+      } catch(e) { rd.innerHTML = '<span class="text-red-400">Failed: ' + e.message + '</span>'; }
+    }
+
+    // Schedules
+    async function loadSchedules() {
+      const res = await fetch(BASE + '/api/schedules');
+      const schedules = await res.json();
+      const tbody = $('schedules-list'); const empty = $('schedules-empty');
+      if (schedules.length === 0) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      tbody.innerHTML = schedules.map(function(s) {
+        var sc = s.status === 'active' ? 'text-emerald-400' : s.status === 'paused' ? 'text-yellow-400' : s.status === 'completed' ? 'text-blue-400' : 'text-red-400';
+        return '<tr class="border-b border-gray-800/50 hover:bg-gray-900/50">' +
+          '<td class="py-3 text-xs font-mono">' + s.contactId.slice(0,8) + '...</td>' +
+          '<td class="py-3 text-xs font-mono">' + s.campaignId.slice(0,8) + '...</td>' +
+          '<td class="py-3">Step ' + s.nextStepIndex + '</td>' +
+          '<td class="py-3 text-gray-400">' + new Date(s.nextSendAt).toLocaleString() + '</td>' +
+          '<td class="py-3"><span class="text-xs ' + sc + '">' + s.status + '</span></td></tr>';
+      }).join('');
+    }
+
+    async function loadDeliverability() {
+      try {
+        const res = await fetch(BASE + '/api/deliverability');
+        const stats = await res.json();
+        
+        $('stats-sent').innerText = stats.sent;
+        $('stats-open-rate').innerText = stats.openRate + '%';
+        $('stats-opened-count').innerText = stats.opened + ' emails';
+        $('stats-bounce-rate').innerText = stats.bounceRate + '%';
+        $('stats-bounced-count').innerText = stats.bounced + ' emails';
+        $('stats-reply-rate').innerText = stats.replyRate + '%';
+        $('stats-replied-count').innerText = stats.replied + ' emails';
+
+        const tbody = $('deliverability-list');
+        const empty = $('deliverability-empty');
+        if (stats.records.length === 0) {
+          tbody.innerHTML = '';
+          empty.classList.remove('hidden');
+          return;
+        }
+        empty.classList.add('hidden');
+
+        tbody.innerHTML = stats.records.map(function(r) {
+          const date = new Date(r.sentAt).toLocaleString();
+          let badgeClass = 'bg-gray-800 text-gray-400';
+          if (r.status === 'opened') badgeClass = 'bg-emerald-600/20 text-emerald-400';
+          else if (r.status === 'bounced') badgeClass = 'bg-red-600/20 text-red-400';
+          else if (r.status === 'replied') badgeClass = 'bg-blue-600/20 text-blue-400';
+
+          return '<tr class="border-b border-gray-800 hover:bg-gray-900/50 text-gray-300">' +
+            '<td class="py-3 font-medium">' + r.recipientEmail + '</td>' +
+            '<td class="py-3 text-gray-400">' + r.subject + '</td>' +
+            '<td class="py-3 text-gray-500 text-xs">' + date + '</td>' +
+            '<td class="py-3"><span class="px-2 py-0.5 rounded-full text-xs ' + badgeClass + '">' + r.status + '</span></td>' +
+            '</tr>';
+        }).join('');
+      } catch(e) {
+        showToast('Failed to load deliverability: ' + e.message, 'error');
+      }
+    }
+
+    function showScheduleModal() {
+      fetch(BASE + '/api/campaigns').then(function(r) { return r.json(); }).then(function(campaigns) {
+        var sel = $('schedule-campaign');
+        sel.innerHTML = '<option value="">Select campaign...</option>' + campaigns.map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+      });
+      fetch(BASE + '/api/contacts').then(function(r) { return r.json(); }).then(function(contacts) {
+        var sel = $('schedule-contacts');
+        sel.innerHTML = contacts.map(function(c) { return '<option value="' + c.id + '">' + c.email + ' - ' + c.firstName + ' ' + (c.lastName || '') + '</option>'; }).join('');
+      });
+      fetch(BASE + '/api/providers').then(function(r) { return r.json(); }).then(function(providers) {
+        var sel = $('schedule-provider');
+        sel.innerHTML = '<option value="">Select provider...</option>' + providers.map(function(p) { return '<option value="' + p.id + '">' + p.name + ' (' + p.kind.toUpperCase() + ')</option>'; }).join('');
+      });
+      $('schedule-modal').classList.remove('hidden'); $('schedule-modal').classList.add('flex');
+    }
+
+    async function saveSchedule() {
+      const campaignId = $('schedule-campaign').value;
+      const selected = Array.from($('schedule-contacts').selectedOptions).map(function(o) { return o.value; });
+      const startAt = $('schedule-start').value;
+      const providerId = $('schedule-provider').value;
+      if (!campaignId || selected.length === 0) return;
+      await fetch(BASE + '/api/schedules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: campaignId, contactIds: selected, startAt: startAt ? new Date(startAt).toISOString() : undefined, providerId: providerId || undefined }),
+      });
+      closeModal('schedule-modal'); loadSchedules(); showToast('Campaign scheduled');
+    }
+
+    // Init
+    document.querySelector('.tab-btn').click();
+  </script>
+</body>
+</html>

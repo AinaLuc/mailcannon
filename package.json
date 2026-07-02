@@ -1,0 +1,29 @@
+{
+  "name": "mailcannon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered email outreach platform using MCP",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "web": "tsx watch src/web.ts",
+    "build": "tsc",
+    "start": "node dist/web.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "cors": "^2.8.5",
+    "eventsource": "^4.1.0",
+    "express": "^4.18.2",
+    "googleapis": "^173.0.0",
+    "mcp-remote": "^0.1.38",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
