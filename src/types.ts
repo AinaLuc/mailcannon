@@ -6,6 +6,8 @@ export interface Contact {
   company?: string;
   title?: string;
   createdAt: string;
+  unsubscribed?: boolean;
+  unsubscribedAt?: string;
 }
 
 export interface CampaignStep {
@@ -50,6 +52,11 @@ export interface ProviderConfig {
   clientId?: string;
   tokenExpiresAt?: number;
   createdAt: string;
+  readingUrl?: string;
+  readingAccessToken?: string;
+  readingRefreshToken?: string;
+  readingClientId?: string;
+  readingTokenExpiresAt?: number;
 }
 
 export interface SentEmail {

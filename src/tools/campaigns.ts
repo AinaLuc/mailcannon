@@ -1,6 +1,5 @@
 import { z } from "zod";
-import crypto from "node:crypto";
-import { db } from "../db.js";
+import { supabase } from "../supabase.js";
 import type { Campaign, CampaignStep } from "../types.js";
 
 export const CreateCampaignSchema = z.object({
@@ -21,35 +20,55 @@ export const ScheduleCampaignSchema = z.object({
   provider: z.enum(["gmail", "zoho"]).optional().default("gmail"),
 });
 
-export function createCampaign(name: string): Campaign {
-  const store = db.load();
-  const campaign: Campaign = {
-    id: crypto.randomUUID(),
-    name,
-    steps: [],
-    createdAt: new Date().toISOString(),
-  };
-  store.campaigns.push(campaign);
-  db.save(store);
-  return campaign;
+export async function createCampaign(name: string): Promise<Campaign> {
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({ name })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { ...data, steps: [] };
 }
 
-export function addStep(input: z.infer<typeof AddStepSchema>): CampaignStep {
-  const store = db.load();
-  const campaign = store.campaigns.find((c) => c.id === input.campaignId);
+export async function addStep(input: z.infer<typeof AddStepSchema>): Promise<CampaignStep> {
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("id")
+    .eq("id", input.campaignId)
+    .single();
   if (!campaign) throw new Error(`Campaign ${input.campaignId} not found`);
 
-  const step: CampaignStep = {
-    id: crypto.randomUUID(),
-    day: input.day,
-    subject: input.subject,
-    body: input.body,
-  };
-  campaign.steps.push(step);
-  db.save(store);
-  return step;
+  const { data, error } = await supabase
+    .from("campaign_steps")
+    .insert({
+      campaignId: input.campaignId,
+      day: input.day,
+      subject: input.subject,
+      body: input.body,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-export function listCampaigns(): Campaign[] {
-  return db.load().campaigns;
+export async function listCampaigns(): Promise<Campaign[]> {
+  const { data: campaigns, error } = await supabase
+    .from("campaigns")
+    .select("*")
+    .order("createdAt", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const { data: steps } = await supabase.from("campaign_steps").select("*");
+  const stepsByCampaign: Record<string, CampaignStep[]> = {};
+  for (const step of steps || []) {
+    const cid = (step as any).campaignId;
+    if (!stepsByCampaign[cid]) stepsByCampaign[cid] = [];
+    stepsByCampaign[cid].push(step);
+  }
+
+  return (campaigns || []).map((c) => ({
+    ...c,
+    steps: stepsByCampaign[c.id] || [],
+  }));
 }

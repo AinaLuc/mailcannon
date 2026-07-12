@@ -1,6 +1,5 @@
 import { z } from "zod";
-import crypto from "node:crypto";
-import { db } from "../db.js";
+import { supabase } from "../supabase.js";
 import type { Contact } from "../types.js";
 
 export const AddContactSchema = z.object({
@@ -19,38 +18,56 @@ export const RemoveContactSchema = z.object({
   id: z.string(),
 });
 
-export function addContact(input: z.infer<typeof AddContactSchema>): Contact {
-  const store = db.load();
-  const contact: Contact = {
-    id: crypto.randomUUID(),
-    ...input,
-    createdAt: new Date().toISOString(),
-  };
-  store.contacts.push(contact);
-  db.save(store);
-  return contact;
+export async function addContact(input: z.infer<typeof AddContactSchema>): Promise<Contact> {
+  const { data, error } = await supabase
+    .from("contacts")
+    .insert({
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName ?? null,
+      company: input.company ?? null,
+      title: input.title ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-export function addContacts(input: z.infer<typeof AddContactsSchema>): Contact[] {
-  const store = db.load();
-  const contacts: Contact[] = input.contacts.map((c) => ({
-    id: crypto.randomUUID(),
-    ...c,
-    createdAt: new Date().toISOString(),
-  }));
-  store.contacts.push(...contacts);
-  db.save(store);
-  return contacts;
+export async function addContacts(input: z.infer<typeof AddContactsSchema>): Promise<Contact[]> {
+  const { data, error } = await supabase
+    .from("contacts")
+    .insert(input.contacts.map((c) => ({
+      email: c.email,
+      firstName: c.firstName,
+      lastName: c.lastName ?? null,
+      company: c.company ?? null,
+      title: c.title ?? null,
+    })))
+    .select();
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
-export function listContacts(): Contact[] {
-  return db.load().contacts;
+export async function listContacts(): Promise<Contact[]> {
+  const { data, error } = await supabase.from("contacts").select("*").order("createdAt", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
-export function removeContact(id: string): boolean {
-  const store = db.load();
-  const len = store.contacts.length;
-  store.contacts = store.contacts.filter((c) => c.id !== id);
-  db.save(store);
-  return store.contacts.length < len;
+export async function removeContact(id: string): Promise<boolean> {
+  const { error, count } = await supabase.from("contacts").delete({ count: "exact" }).eq("id", id);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
+export async function unsubscribeContactByEmail(email: string): Promise<boolean> {
+  const { error, count } = await supabase
+    .from("contacts")
+    .update({ unsubscribed: true, unsubscribedAt: new Date().toISOString() })
+    .eq("email", email.toLowerCase())
+    .gt("unsubscribed", false)
+    .select();
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
 }

@@ -1,92 +1,96 @@
 import crypto from "node:crypto";
-import { db } from "../db.js";
+import { supabase } from "../supabase.js";
 import type { SentEmail } from "../types.js";
 
-export function recordSentEmail(
+export async function recordSentEmail(
   email: Omit<SentEmail, "id" | "status" | "sentAt"> & { id?: string }
-): SentEmail {
-  const store = db.load();
-  const record: SentEmail = {
+): Promise<SentEmail> {
+  const record = {
     id: email.id || crypto.randomUUID(),
     campaignId: email.campaignId,
     contactId: email.contactId,
     recipientEmail: email.recipientEmail,
     subject: email.subject,
-    sentAt: new Date().toISOString(),
-    status: "sent",
     messageId: email.messageId,
     threadId: email.threadId,
   };
 
-  store.sentEmails.push(record);
-  db.save(store);
-  return record;
+  const { data, error } = await supabase
+    .from("sent_emails")
+    .insert(record)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-export function recordOpen(id: string): boolean {
-  const store = db.load();
-  const idx = store.sentEmails.findIndex((e) => e.id === id);
-  if (idx === -1) return false;
+export async function recordOpen(id: string): Promise<boolean> {
+  const { data: current } = await supabase
+    .from("sent_emails")
+    .select("status")
+    .eq("id", id)
+    .single();
 
-  // Only update status if it's currently 'sent' (i.e. don't overwrite bounced or replied status)
-  const current = store.sentEmails[idx];
-  if (current.status === "sent") {
-    current.status = "opened";
-    current.openedAt = new Date().toISOString();
-    db.save(store);
-    return true;
-  }
-  return false;
+  if (!current || current.status !== "sent") return false;
+
+  const { error } = await supabase
+    .from("sent_emails")
+    .update({ status: "opened", openedAt: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "sent");
+  if (error) throw new Error(error.message);
+  return true;
 }
 
-export function recordBounce(recipientEmail: string, bouncedAt?: string): boolean {
-  const store = db.load();
-  // Find the most recent sent email to this recipient
-  const matches = store.sentEmails
-    .map((e, index) => ({ e, index }))
-    .filter(({ e }) => e.recipientEmail.toLowerCase() === recipientEmail.toLowerCase())
-    .sort((a, b) => new Date(b.e.sentAt).getTime() - new Date(a.e.sentAt).getTime());
+export async function recordBounce(recipientEmail: string, bouncedAt?: string): Promise<boolean> {
+  const { data: matches } = await supabase
+    .from("sent_emails")
+    .select("id, status")
+    .eq("recipientEmail", recipientEmail.toLowerCase())
+    .order("sentAt", { ascending: false })
+    .limit(1);
 
-  if (matches.length === 0) return false;
+  if (!matches || matches.length === 0) return false;
+  const target = matches[0];
+  if (target.status === "bounced") return false;
 
-  // Update status of the most recent one
-  const targetIndex = matches[0].index;
-  const current = store.sentEmails[targetIndex];
-  if (current.status !== "bounced") {
-    current.status = "bounced";
-    current.bouncedAt = bouncedAt || new Date().toISOString();
-    db.save(store);
-    return true;
-  }
-  return false;
+  const { error } = await supabase
+    .from("sent_emails")
+    .update({ status: "bounced", bouncedAt: bouncedAt || new Date().toISOString() })
+    .eq("id", target.id);
+  if (error) throw new Error(error.message);
+  return true;
 }
 
-export function recordReply(threadId: string, repliedAt?: string): boolean {
-  const store = db.load();
-  // Find the most recent sent email in this thread
-  const matches = store.sentEmails
-    .map((e, index) => ({ e, index }))
-    .filter(({ e }) => e.threadId === threadId)
-    .sort((a, b) => new Date(b.e.sentAt).getTime() - new Date(a.e.sentAt).getTime());
+export async function recordReply(threadId: string, repliedAt?: string): Promise<boolean> {
+  const { data: matches } = await supabase
+    .from("sent_emails")
+    .select("id, status")
+    .eq("threadId", threadId)
+    .order("sentAt", { ascending: false })
+    .limit(1);
 
-  if (matches.length === 0) return false;
+  if (!matches || matches.length === 0) return false;
+  const target = matches[0];
+  if (target.status === "replied" || target.status === "bounced") return false;
 
-  const targetIndex = matches[0].index;
-  const current = store.sentEmails[targetIndex];
-  if (current.status !== "replied" && current.status !== "bounced") {
-    current.status = "replied";
-    current.repliedAt = repliedAt || new Date().toISOString();
-    db.save(store);
-    return true;
-  }
-  return false;
+  const { error } = await supabase
+    .from("sent_emails")
+    .update({ status: "replied", repliedAt: repliedAt || new Date().toISOString() })
+    .eq("id", target.id);
+  if (error) throw new Error(error.message);
+  return true;
 }
 
-export function getDeliverabilityStats() {
-  const store = db.load();
-  const sentEmails = store.sentEmails;
+export async function getDeliverabilityStats() {
+  const { data: sentEmails, error } = await supabase
+    .from("sent_emails")
+    .select("*")
+    .order("sentAt", { ascending: false });
 
-  const total = sentEmails.length;
+  if (error) throw new Error(error.message);
+
+  const total = sentEmails?.length || 0;
   if (total === 0) {
     return {
       sent: 0,
@@ -104,25 +108,20 @@ export function getDeliverabilityStats() {
   let bounced = 0;
   let replied = 0;
 
-  for (const email of sentEmails) {
+  for (const email of sentEmails || []) {
     if (email.status === "opened") opened++;
     else if (email.status === "bounced") bounced++;
     else if (email.status === "replied") replied++;
   }
-
-  // Note: Rates are calculated as percentage of total sent
-  const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
-  const bounceRate = total > 0 ? Math.round((bounced / total) * 100) : 0;
-  const replyRate = total > 0 ? Math.round((replied / total) * 100) : 0;
 
   return {
     sent: total,
     opened,
     bounced,
     replied,
-    openRate,
-    bounceRate,
-    replyRate,
-    records: sentEmails.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()),
+    openRate: Math.round((opened / total) * 100),
+    bounceRate: Math.round((bounced / total) * 100),
+    replyRate: Math.round((replied / total) * 100),
+    records: sentEmails || [],
   };
 }

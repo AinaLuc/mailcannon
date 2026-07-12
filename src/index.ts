@@ -84,44 +84,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (name) {
     case "add_contact": {
       const input = AddContactSchema.parse(args);
-      const contact = addContact(input);
+      const contact = await addContact(input);
       return { content: [{ type: "text", text: JSON.stringify(contact) }] };
     }
     case "add_contacts": {
       const input = AddContactsSchema.parse(args);
-      const contacts = addContacts(input);
+      const contacts = await addContacts(input);
       return { content: [{ type: "text", text: `Added ${contacts.length} contacts` }] };
     }
     case "list_contacts": {
-      const contacts = listContacts();
+      const contacts = await listContacts();
       return { content: [{ type: "text", text: JSON.stringify(contacts, null, 2) }] };
     }
     case "remove_contact": {
       const { id } = RemoveContactSchema.parse(args);
-      const removed = removeContact(id);
+      const removed = await removeContact(id);
       return { content: [{ type: "text", text: removed ? `Removed ${id}` : "Not found" }] };
     }
     case "create_campaign": {
       const { name } = CreateCampaignSchema.parse(args);
-      const campaign = createCampaign(name);
+      const campaign = await createCampaign(name);
       return { content: [{ type: "text", text: JSON.stringify(campaign) }] };
     }
     case "add_campaign_step": {
       const input = AddStepSchema.parse(args);
-      const step = addStep(input);
+      const step = await addStep(input);
       return { content: [{ type: "text", text: JSON.stringify(step) }] };
     }
     case "list_campaigns": {
-      const campaigns = listCampaigns();
+      const campaigns = await listCampaigns();
       return { content: [{ type: "text", text: JSON.stringify(campaigns, null, 2) }] };
     }
     case "schedule_campaign": {
       const { campaignId, contactIds, startAt } = ScheduleCampaignSchema.parse(args);
-      const items = scheduleCampaign(campaignId, contactIds, startAt);
+      const items = await scheduleCampaign(campaignId, contactIds, startAt);
       return { content: [{ type: "text", text: `Scheduled ${items.length} contacts in campaign` }] };
     }
     case "list_schedules": {
-      const schedules = listSchedules();
+      const schedules = await listSchedules();
       return { content: [{ type: "text", text: JSON.stringify(schedules, null, 2) }] };
     }
     default:

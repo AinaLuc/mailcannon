@@ -1,6 +1,6 @@
 import { z } from "zod";
 import crypto from "node:crypto";
-import { db } from "../db.js";
+import { supabase } from "../supabase.js";
 import type { ProviderConfig } from "../types.js";
 
 export const AddProviderSchema = z.object({
@@ -15,11 +15,15 @@ export const AddProviderSchema = z.object({
   refreshToken: z.string().optional(),
   clientId: z.string().optional(),
   tokenExpiresAt: z.number().optional(),
+  readingUrl: z.string().optional(),
+  readingAccessToken: z.string().optional(),
+  readingRefreshToken: z.string().optional(),
+  readingClientId: z.string().optional(),
+  readingTokenExpiresAt: z.number().optional(),
 });
 
-export function addProvider(input: z.infer<typeof AddProviderSchema>): ProviderConfig {
-  const store = db.load();
-  const provider: ProviderConfig = {
+export async function addProvider(input: z.infer<typeof AddProviderSchema>): Promise<ProviderConfig> {
+  const provider = {
     id: crypto.randomUUID(),
     name: input.name,
     kind: input.kind,
@@ -32,33 +36,50 @@ export function addProvider(input: z.infer<typeof AddProviderSchema>): ProviderC
     refreshToken: input.refreshToken,
     clientId: input.clientId,
     tokenExpiresAt: input.tokenExpiresAt,
-    createdAt: new Date().toISOString(),
+    readingUrl: input.readingUrl,
+    readingAccessToken: input.readingAccessToken,
+    readingRefreshToken: input.readingRefreshToken,
+    readingClientId: input.readingClientId,
+    readingTokenExpiresAt: input.readingTokenExpiresAt,
   };
-  store.providers.push(provider);
-  db.save(store);
-  return provider;
+
+  const { data, error } = await supabase
+    .from("providers")
+    .insert(provider)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-export function listProviders(): ProviderConfig[] {
-  return db.load().providers;
+export async function listProviders(): Promise<ProviderConfig[]> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("*")
+    .order("createdAt", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
-export function removeProvider(id: string): boolean {
-  const store = db.load();
-  const len = store.providers.length;
-  store.providers = store.providers.filter((p) => p.id !== id);
-  db.save(store);
-  return store.providers.length < len;
+export async function removeProvider(id: string): Promise<boolean> {
+  const { error, count } = await supabase.from("providers").delete({ count: "exact" }).eq("id", id);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
 }
 
-export function updateProvider(
+export async function updateProvider(
   id: string,
   patch: Partial<ProviderConfig>,
-): ProviderConfig | null {
-  const store = db.load();
-  const idx = store.providers.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  store.providers[idx] = { ...store.providers[idx], ...patch };
-  db.save(store);
-  return store.providers[idx];
+): Promise<ProviderConfig | null> {
+  const { data, error } = await supabase
+    .from("providers")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return data;
 }

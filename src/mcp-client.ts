@@ -264,22 +264,42 @@ const transportCache = new Map<
   StdioClientTransport | StreamableHTTPTransport
 >();
 
-function getTransport(config: ProviderConfig): StdioClientTransport | StreamableHTTPTransport {
-  if (transportCache.has(config.id)) {
-    return transportCache.get(config.id)!;
+function getTransportForUrl(
+  config: ProviderConfig,
+  url: string,
+  isReading: boolean = false
+): StdioClientTransport | StreamableHTTPTransport {
+  const cacheKey = isReading ? `${config.id}-reading` : config.id;
+  if (transportCache.has(cacheKey)) {
+    return transportCache.get(cacheKey)!;
   }
 
   let transport: StdioClientTransport | StreamableHTTPTransport;
 
-  if (config.transport === "sse" && config.url) {
+  if (config.transport === "sse" && url) {
     if (config.command) {
+      const args = config.args ? [...config.args] : [];
+      // Replace the URL argument in args with the target URL
+      const urlIndex = args.findIndex(arg => arg.startsWith("http://") || arg.startsWith("https://"));
+      if (urlIndex !== -1) {
+        args[urlIndex] = url;
+      } else {
+        const mcpRemoteIndex = args.indexOf("mcp-remote");
+        if (mcpRemoteIndex !== -1) {
+          args.splice(mcpRemoteIndex + 1, 0, url);
+        } else {
+          args.push(url);
+        }
+      }
+
       transport = new StdioClientTransport({
         command: config.command,
-        args: config.args ?? [],
+        args: args,
         env: { ...process.env, ...config.env } as Record<string, string>,
       });
     } else {
-      transport = new StreamableHTTPTransport(new URL(config.url), config.accessToken ?? "");
+      const token = isReading ? (config.readingAccessToken ?? "") : (config.accessToken ?? "");
+      transport = new StreamableHTTPTransport(new URL(url), token);
     }
   } else {
     const proc = spawn(config.command!, config.args ?? [], {
@@ -291,7 +311,7 @@ function getTransport(config: ProviderConfig): StdioClientTransport | Streamable
     });
     proc.on("exit", (code) => {
       console.error(`[MCP] ${config.name} exited with code ${code}`);
-      transportCache.delete(config.id);
+      transportCache.delete(cacheKey);
     });
     proc.stderr?.on("data", (d: Buffer) => {
       console.error(`[MCP:${config.name}] ${d.toString().trim()}`);
@@ -302,12 +322,22 @@ function getTransport(config: ProviderConfig): StdioClientTransport | Streamable
     });
   }
 
-  transportCache.set(config.id, transport);
+  transportCache.set(cacheKey, transport);
   return transport;
 }
 
-export async function testConnection(
+export function getTransport(config: ProviderConfig): StdioClientTransport | StreamableHTTPTransport {
+  return getTransportForUrl(config, config.url ?? "", false);
+}
+
+export function getReadingTransport(config: ProviderConfig): StdioClientTransport | StreamableHTTPTransport {
+  return getTransportForUrl(config, config.readingUrl ?? "", true);
+}
+
+async function testConnectionForUrl(
   config: ProviderConfig,
+  url: string,
+  isReading: boolean,
 ): Promise<{
   ok: boolean;
   message: string;
@@ -320,8 +350,11 @@ export async function testConnection(
     { capabilities: {} },
   );
 
+  const cacheKey = isReading ? `${config.id}-reading` : config.id;
+  transportCache.delete(cacheKey);
+
   try {
-    const transport = getTransport(config);
+    const transport = getTransportForUrl(config, url, isReading);
     await client.connect(transport);
     const result = await client.listTools();
     const toolNames = result.tools.map((t) => t.name);
@@ -357,7 +390,7 @@ export async function testConnection(
     }
 
     await client.close();
-    transportCache.delete(config.id);
+    transportCache.delete(cacheKey);
     const sendMsg = sendTool
       ? `Found ${result.tools.length} tool(s), send-capable: "${sendTool}"`
       : `Found ${result.tools.length} tool(s): ${toolNames.join(", ")}`;
@@ -371,9 +404,51 @@ export async function testConnection(
       discoveredEnv: Object.keys(discoveredEnv).length ? discoveredEnv : undefined,
     };
   } catch (err: any) {
-    transportCache.delete(config.id);
-    return { ok: false, message: `Connection failed: ${err.message}` };
+    transportCache.delete(cacheKey);
+    return { ok: false, message: `Connection to ${url} failed: ${err.message}` };
   }
+}
+
+export async function testConnection(
+  config: ProviderConfig,
+): Promise<{
+  ok: boolean;
+  message: string;
+  tools?: string[];
+  accounts?: string;
+  discoveredEnv?: Record<string, string>;
+}> {
+  const primaryResult = await testConnectionForUrl(config, config.url ?? "", false);
+
+  if (config.kind === "zoho" && config.readingUrl) {
+    const readingResult = await testConnectionForUrl(config, config.readingUrl, true);
+    if (!primaryResult.ok) {
+      return {
+        ok: false,
+        message: `Sending connection failed: ${primaryResult.message}`,
+      };
+    }
+    if (!readingResult.ok) {
+      return {
+        ok: false,
+        message: `Sending OK, but Reading connection failed: ${readingResult.message}`,
+      };
+    }
+
+    const combinedTools = [
+      ...(primaryResult.tools ?? []).map((t) => `${t} (sending)`),
+      ...(readingResult.tools ?? []).map((t) => `${t} (reading)`),
+    ];
+    return {
+      ok: true,
+      message: `Sending URL connected OK. Reading URL connected OK.\n\nSending tools: ${primaryResult.message}\n\nReading tools: ${readingResult.message}`,
+      tools: combinedTools,
+      accounts: primaryResult.accounts || readingResult.accounts,
+      discoveredEnv: { ...primaryResult.discoveredEnv, ...readingResult.discoveredEnv },
+    };
+  }
+
+  return primaryResult;
 }
 
 function buildToolArgs(
@@ -388,7 +463,7 @@ function buildToolArgs(
   for (const [key, prop] of Object.entries(props)) {
     const p = prop as any;
 
-    if (p.type === "object" && p.properties) {
+    if ((p.type === "object" || p.properties) && p.properties) {
       const nested: Record<string, any> = {};
       for (const [nk, np] of Object.entries(p.properties)) {
         const ns = np as any;
@@ -471,7 +546,8 @@ export async function sendViaMCP(
       };
     }
 
-    const trackingPixel = `<img src="http://localhost:3456/track/open/${actualTrackingId}" width="1" height="1" style="display:none" />`;
+    const baseUrl = process.env.PUBLIC_URL || process.env.APP_URL || "http://localhost:3456";
+    const trackingPixel = `<img src="${baseUrl}/track/open/${actualTrackingId}" width="1" height="1" style="display:none" />`;
     const wrappedBody = wrapHtml(body);
     const bodyWithPixel = wrappedBody.includes("</body>")
       ? wrappedBody.replace("</body>", `${trackingPixel}</body>`)

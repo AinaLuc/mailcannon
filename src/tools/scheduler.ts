@@ -1,25 +1,36 @@
-import crypto from "node:crypto";
-import { db } from "../db.js";
+import { supabase } from "../supabase.js";
 import type { ScheduleItem } from "../types.js";
 
-export function scheduleCampaign(
+export async function scheduleCampaign(
   campaignId: string,
   contactIds: string[],
   startAt?: string,
   providerId?: string,
-): ScheduleItem[] {
-  const store = db.load();
-  const campaign = store.campaigns.find((c) => c.id === campaignId);
+): Promise<ScheduleItem[]> {
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("id")
+    .eq("id", campaignId)
+    .single();
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
-  if (campaign.steps.length === 0) throw new Error("Campaign has no steps");
 
-  const campaignContacts = store.contacts.filter((c) => contactIds.includes(c.id));
-  const missing = contactIds.filter((id) => !campaignContacts.some((c) => c.id === id));
+  const { data: steps, error: stepsErr } = await supabase
+    .from("campaign_steps")
+    .select("id")
+    .eq("campaignId", campaignId);
+  if (stepsErr) throw new Error(stepsErr.message);
+  if (!steps || steps.length === 0) throw new Error("Campaign has no steps");
+
+  const { data: contacts } = await supabase
+    .from("contacts")
+    .select("id")
+    .in("id", contactIds);
+  const foundIds = new Set((contacts || []).map((c) => c.id));
+  const missing = contactIds.filter((id) => !foundIds.has(id));
   if (missing.length > 0) throw new Error(`Contacts not found: ${missing.join(", ")}`);
 
   const startTime = startAt ? new Date(startAt).getTime() : Date.now();
-  const scheduleItems: ScheduleItem[] = contactIds.map((contactId) => ({
-    id: crypto.randomUUID(),
+  const items = contactIds.map((contactId) => ({
     campaignId,
     contactId,
     nextStepIndex: 0,
@@ -29,18 +40,30 @@ export function scheduleCampaign(
     providerId,
   }));
 
-  store.schedules.push(...scheduleItems);
-  db.save(store);
-  return scheduleItems;
+  const { data, error } = await supabase
+    .from("schedules")
+    .insert(items)
+    .select();
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
-export function listSchedules() {
-  return db.load().schedules;
+export async function listSchedules(): Promise<ScheduleItem[]> {
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .order("startedAt", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
-export function getNextDue(): ScheduleItem[] {
-  const now = new Date();
-  return db
-    .load()
-    .schedules.filter((s) => s.status === "active" && new Date(s.nextSendAt) <= now);
+export async function getNextDue(): Promise<ScheduleItem[]> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .eq("status", "active")
+    .lte("nextSendAt", now);
+  if (error) throw new Error(error.message);
+  return data || [];
 }

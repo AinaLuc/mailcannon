@@ -71,11 +71,18 @@
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div class="flex items-center gap-3 mb-3">
             <span class="text-2xl">📨</span>
-            <div><h3 class="font-semibold text-white">Zoho Mail</h3><p class="text-xs text-gray-500">Remote MCP — paste your Zoho URL</p></div>
+            <div><h3 class="font-semibold text-white">Zoho Mail</h3><p class="text-xs text-gray-500">Remote MCP — paste your Zoho URLs</p></div>
           </div>
-          <div class="flex gap-2 mt-3">
-            <input id="zoho-url-input" placeholder="https://.../message" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-600" />
-            <button onclick="quickAddZoho()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg transition-colors whitespace-nowrap">Connect</button>
+          <div class="space-y-2 mt-3">
+            <div>
+              <label class="text-[10px] text-gray-400 block mb-1">Sending & Replies URL</label>
+              <input id="zoho-url-input" placeholder="https://mail-sending-.../message" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-600" />
+            </div>
+            <div>
+              <label class="text-[10px] text-gray-400 block mb-1">Reading & Search URL</label>
+              <input id="zoho-reading-url-input" placeholder="https://mail-reading-.../message" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-600" />
+            </div>
+            <button onclick="quickAddZoho()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap font-medium mt-1">Connect Zoho Mail</button>
           </div>
         </div>
       </div>
@@ -205,7 +212,7 @@
       <h3 class="text-lg font-semibold mb-4">Add MCP Provider</h3>
       <div class="space-y-3">
         <label class="text-xs text-gray-500 block mb-1">Provider Type</label>
-        <select id="provider-kind" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600">
+        <select id="provider-kind" onchange="toggleZohoFields()" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600">
           <option value="gmail">Gmail MCP</option>
           <option value="zoho">Zoho MCP</option>
         </select>
@@ -225,8 +232,12 @@
             Use mcp-remote wrapper (recommended)
           </label>
           <input id="provider-url" placeholder="URL (e.g. https://.../message)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
-          <div id="provider-mcp-remote-fields">
-            <p class="text-xs text-gray-500 mt-1">Launches <code class="text-emerald-400">mcp-remote</code> to handle OAuth + HTTP transport automatically.</p>
+          <div id="provider-zoho-reading-field" class="hidden mt-2">
+            <label class="text-xs text-gray-500 block mb-1">Reading & Search URL (Zoho only)</label>
+            <input id="provider-reading-url" placeholder="Reading URL (e.g. https://.../message)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600" />
+          </div>
+          <div id="provider-mcp-remote-fields" class="mt-1">
+            <p class="text-xs text-gray-500">Launches <code class="text-emerald-400">mcp-remote</code> to handle OAuth + HTTP transport automatically.</p>
           </div>
           <div id="provider-direct-http-fields" class="hidden">
             <div class="flex gap-2 mt-2">
@@ -415,14 +426,19 @@ The MailCannon Team</textarea>
       empty.classList.add('hidden');
       container.innerHTML = providers.map(function(p) {
         var badgeColor = p.kind === 'gmail' ? 'bg-red-600/20 text-red-400' : 'bg-blue-600/20 text-blue-400';
-        var statusIcon = p.kind === 'gmail' ? '<span class="text-emerald-400 text-xs">✅ ' + (p.refreshToken ? 'Connected via Google OAuth' : 'via gmail-mcp') + '</span>' : '';
+        var statusIcon = p.kind === 'gmail' 
+          ? '<span class="text-emerald-400 text-xs">✅ ' + (p.refreshToken ? 'Connected via Google OAuth' : 'via gmail-mcp') + '</span>' 
+          : (p.kind === 'zoho' ? '<span class="text-emerald-400 text-xs">✅ Connected via Zoho MCP</span>' : '');
+        var urlInfo = p.readingUrl 
+          ? '<div class="text-xs text-gray-500 font-mono truncate">Send: ' + p.url + '</div><div class="text-xs text-gray-500 font-mono truncate">Read: ' + p.readingUrl + '</div>'
+          : '<div class="text-xs text-gray-500 font-mono truncate">' + (p.url || (p.command + ' ' + (p.args || []).join(' '))) + '</div>';
         return '<div class="bg-gray-900 border border-gray-800 rounded-xl p-4">' +
           '<div class="flex items-start justify-between mb-3">' +
           '<div><h3 class="font-semibold text-white">' + p.name + '</h3><span class="text-xs ' + badgeColor + ' px-2 py-0.5 rounded-full">' + p.kind.toUpperCase() + '</span></div>' +
           '<div class="flex gap-2"><button onclick="testProvider(\'' + p.id + '\')" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors">Test</button>' +
           '<button onclick="showSendModal(\'' + p.id + '\')" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-emerald-300 px-3 py-1.5 rounded-lg transition-colors">Send</button>' +
           '<button onclick="deleteProvider(\'' + p.id + '\')" class="text-xs bg-red-900/50 hover:bg-red-800 text-red-400 px-3 py-1.5 rounded-lg transition-colors">Remove</button></div></div>' +
-          '<div class="text-xs text-gray-500 font-mono truncate">' + (p.url || (p.command + ' ' + (p.args || []).join(' '))) + '</div>' +
+          urlInfo +
           (statusIcon || (p.transport === 'sse' ? '<div class="mt-1 text-xs ' + (p.accessToken ? 'text-emerald-400' : 'text-yellow-400') + '">' + (p.accessToken ? 'Token set' : 'No token — test to start OAuth') + '</div>' : '')) +
           '<div id="provider-status-' + p.id + '" class="mt-2 text-xs"></div></div>';
       }).join('');
@@ -432,6 +448,16 @@ The MailCannon Team</textarea>
       var transport = $('provider-transport').value;
       $('provider-stdio-fields').classList.toggle('hidden', transport !== 'stdio');
       $('provider-sse-fields').classList.toggle('hidden', transport !== 'sse');
+      toggleZohoFields();
+    }
+
+    function toggleZohoFields() {
+      var kind = $('provider-kind').value;
+      var transport = $('provider-transport').value;
+      var zohoField = $('provider-zoho-reading-field');
+      if (zohoField) {
+        zohoField.classList.toggle('hidden', kind !== 'zoho' || transport !== 'sse');
+      }
     }
 
     function toggleMcpRemote() {
@@ -442,10 +468,11 @@ The MailCannon Team</textarea>
 
     function showAddProviderModal() {
       $('provider-name').value = ''; $('provider-command').value = ''; $('provider-args').value = ''; $('provider-url').value = ''; $('provider-access-token').value = ''; $('provider-env').value = '';
+      if ($('provider-reading-url')) $('provider-reading-url').value = '';
       $('provider-transport').value = 'stdio'; $('provider-kind').value = 'gmail';
       $('provider-use-mcp-remote').checked = true;
       $('provider-test-result').classList.add('hidden');
-      toggleTransportFields(); toggleMcpRemote();
+      toggleTransportFields(); toggleMcpRemote(); toggleZohoFields();
       $('add-provider-modal').classList.remove('hidden'); $('add-provider-modal').classList.add('flex');
     }
 
@@ -459,6 +486,9 @@ The MailCannon Team</textarea>
       };
       if (transport === 'sse') {
         data.url = $('provider-url').value;
+        if (data.kind === 'zoho') {
+          data.readingUrl = $('provider-reading-url').value.trim();
+        }
         if ($('provider-use-mcp-remote').checked && data.url) {
           data.command = 'npx';
           data.args = ['mcp-remote', data.url, '--transport', 'http-only'];
@@ -611,7 +641,9 @@ The MailCannon Team</textarea>
     // Quick-add Zoho
     async function quickAddZoho() {
       var url = $('zoho-url-input').value.trim();
-      if (!url) { showToast('Enter your Zoho MCP URL', 'error'); return; }
+      var readingUrl = $('zoho-reading-url-input').value.trim();
+      if (!url) { showToast('Enter your Zoho Sending & Replies URL', 'error'); return; }
+      if (!readingUrl) { showToast('Enter your Zoho Reading & Search URL', 'error'); return; }
       try {
         var res = await fetch(BASE + '/api/providers', {
           method: 'POST',
@@ -621,6 +653,7 @@ The MailCannon Team</textarea>
             kind: 'zoho',
             transport: 'sse',
             url: url,
+            readingUrl: readingUrl,
             command: 'npx',
             args: ['mcp-remote', url, '--transport', 'http-only'],
           }),
